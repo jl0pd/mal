@@ -1,0 +1,5 @@
+**/*.dll
+**/*.exe
+!Mal
+Mal/bin
+Mal/obj

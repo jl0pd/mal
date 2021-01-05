@@ -94,7 +94,7 @@ IMPLS = ada ada.2 awk bash basic bbc-basic c chuck clojure coffee common-lisp cp
 	guile haskell haxe hy io java js jq julia kotlin livescript logo lua make mal \
 	matlab miniMAL nasm nim objc objpascal ocaml perl perl6 php picolisp pike plpgsql \
 	plsql powershell ps python python.2 r racket rexx rpython ruby rust scala scheme skew \
-	swift swift3 swift4 swift5 tcl ts vala vb vhdl vimscript wasm wren yorick xslt zig
+	swift swift3 swift4 swift5 tcl ts vala vb vhdl vimscript wasm wren yorick xslt zig csharp-jl0pd
 
 EXTENSION = .mal
 
@@ -199,6 +199,7 @@ common-lisp_STEP_TO_PROG =   impls/common-lisp/$($(1))
 cpp_STEP_TO_PROG =           impls/cpp/$($(1))
 crystal_STEP_TO_PROG =       impls/crystal/$($(1))
 cs_STEP_TO_PROG =            impls/cs/$($(1)).exe
+csharp-jl0pd_STEP_TO_PROG =  impls/csharp-jl0pd/$($(1)).exe
 d_STEP_TO_PROG =             impls/d/$($(1))
 dart_STEP_TO_PROG =          impls/dart/$($(1)).dart
 elisp_STEP_TO_PROG =         impls/elisp/$($(1)).el
