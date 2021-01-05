@@ -1,0 +1,353 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Text;
+
+namespace Mal
+{
+    public enum TypeKind
+    {
+        None,
+        List,
+        HashMap,
+        Bool,
+        Number,
+        Symbol,
+        String,
+        Char,
+        Nil,
+        Quote,
+        Unquote,
+        QuasiQuote,
+        Deref,
+        SpliceUnquote,
+        WithMeta,
+    }
+
+    public abstract class MalType
+    {
+        public abstract TypeKind Kind { get; }
+
+        public override string ToString() => $"{{{Kind}}}";
+        public abstract string AsLiteral();
+
+        public static MalType Default(TypeKind kind)
+            => kind switch
+            {
+                TypeKind.None => throw new NotSupportedException(),
+                TypeKind.List => MalList.Empty,
+                TypeKind.Bool => MalBool.False,
+                TypeKind.Number => new MalInt32(0),
+                TypeKind.String => MalString.Empty,
+                TypeKind.Char => new MalChar(char.MinValue),
+                TypeKind.Nil => MalNil.Instance,
+                TypeKind.Symbol => MalSymbol.Empty,
+                TypeKind.Quote => new MalQuote(MalNil.Instance),
+                TypeKind.QuasiQuote => new MalQuasiQuote(MalNil.Instance),
+                _ => throw new NotImplementedException(),
+            };
+
+        public static MalBool Create(bool value)
+            => value ? MalBool.True : MalBool.False;
+
+        public static MalInt32 Create(int value)
+            => new(value);
+
+        public static MalDouble Create(double value)
+            => new(value);
+
+        public static MalType? TryCreateNumber(string value)
+        {
+            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double d))
+            {
+                return Create(d);
+            }
+            else if (int.TryParse(value, out int i))
+            {
+                return Create(i);
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        public static MalType CreateNumber(string value)
+            => TryCreateNumber(value) ?? throw new FormatException();
+
+        public static MalString Create(string s)
+            => string.IsNullOrEmpty(s)
+                ? MalString.Empty
+                : new(s);
+
+        public static MalNil CreateNil()
+            => MalNil.Instance;
+
+        public static MalChar Create(char c)
+            => new(c);
+
+        public static MalList Create(IEnumerable<MalType> values)
+            => values switch
+            {
+                ICollection { Count: 0 } => MalList.Empty,
+                ICollection<MalType> { Count: 0 } => MalList.Empty,
+                _ => new(values),
+            };
+
+        public static MalType FromString(string value)
+        {
+            MalType? n = TryCreateNumber(value);
+            if (n is not null)
+            {
+                return n;
+            }
+
+            return value switch
+            {
+                "true" => Create(true),
+                "false" => Create(false),
+                "nil" => CreateNil(),
+                string str when !IsValid(str) => throw new EndOfStreamException(),
+                string str when str[0] == '"' && str[^1] == '"' => Create(str),
+                string str => new MalSymbol(str.Trim()),
+            };
+        }
+
+        private static bool IsValid(string s)
+        {
+            if (s.Length == 0
+            || s.Length == 1 && (s[0] == '"' || s[^1] == '"'))
+            {
+                return false;
+            }
+
+            bool escaped = false;
+            bool inString = s[0] == '"';
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (c == '"' && !escaped && i != 0 && i != s.Length - 1) // unescaped " in the middle
+                {
+                    return false;
+                }
+
+                if (c == '"' && !escaped && i == s.Length - 1)
+                {
+                    inString = false;
+                }
+
+                if (c == '\\')
+                {
+                    escaped = !escaped;
+                }
+                else if (escaped)
+                {
+                    escaped = false;
+                }
+            }
+
+            return !inString;
+        }
+    }
+
+    public abstract class MalType<T> : MalType
+    {
+        public abstract T Value { get; }
+        public override string ToString() => $"{{{Kind}: {AsLiteral()}}}";
+    }
+
+    public abstract class MalWrapper : MalType<MalType>
+    {
+        public override MalType Value { get; }
+        protected MalWrapper(MalType value) => Value = value;
+        protected abstract string Name { get; }
+        public override string AsLiteral() => $"({Name} {Value.AsLiteral()})";
+    }
+
+    public class MalDeref : MalWrapper
+    {
+        public MalDeref(MalType value) : base(value) { }
+        public override TypeKind Kind => TypeKind.Deref;
+        protected override string Name => "deref";
+    }
+
+    public class MalWithMeta : MalWrapper
+    {
+        public MalWithMeta(MalType value) : base(value) { }
+        public override TypeKind Kind => TypeKind.WithMeta;
+        protected override string Name => "with-meta";
+    }
+
+    public class MalSpliceUnquote : MalWrapper
+    {
+        public MalSpliceUnquote(MalType value) : base(value) { }
+        public override TypeKind Kind => TypeKind.SpliceUnquote;
+        protected override string Name => "splice-unquote";
+    }
+
+    public class MalQuote : MalWrapper
+    {
+        public MalQuote(MalType value) : base(value) { }
+        public override TypeKind Kind => TypeKind.Quote;
+        protected override string Name => "quote";
+    }
+
+    public class MalUnquote : MalWrapper
+    {
+        public MalUnquote(MalType value) : base(value) { }
+        public override TypeKind Kind => TypeKind.Unquote;
+        protected override string Name => "unquote";
+    }
+
+    public class MalQuasiQuote : MalWrapper
+    {
+        public MalQuasiQuote(MalType value) : base(value) { }
+        public override TypeKind Kind => TypeKind.QuasiQuote;
+        protected override string Name => "quasiquote";
+    }
+
+    public abstract class MalNumber<T> : MalType<T> where T : unmanaged
+    {
+        public override TypeKind Kind => TypeKind.Number;
+    }
+
+    public class MalInt32 : MalNumber<int>
+    {
+        public MalInt32(int value) => Value = value;
+        public override int Value { get; }
+        public override string AsLiteral() => Value.ToString(CultureInfo.InvariantCulture);
+    }
+
+    public class MalDouble : MalNumber<double>
+    {
+        public MalDouble(double value) => Value = value;
+        public override double Value { get; }
+        public override string AsLiteral() => Value.ToString(CultureInfo.InvariantCulture);
+    }
+
+    public class MalChar : MalType<char>
+    {
+        public MalChar(char value) => Value = value;
+        public override char Value { get; }
+        public override TypeKind Kind => TypeKind.Char;
+        public override string AsLiteral() => Value.ToString(CultureInfo.InvariantCulture);
+    }
+
+    public class MalString : MalType<string>
+    {
+        public MalString(string value) => Value = value;
+        public override TypeKind Kind => TypeKind.String;
+        public override string Value { get; }
+
+        public static MalString Empty { get; } = new MalString("");
+        public override string AsLiteral() => Value;
+    }
+
+    public class MalSymbol : MalType<string>
+    {
+        public MalSymbol(string value) => Value = value;
+        public override TypeKind Kind => TypeKind.Symbol;
+        public override string Value { get; }
+
+        public static MalSymbol Empty { get; } = new MalSymbol("");
+        public override string AsLiteral() => Value;
+    }
+
+    public class MalNil : MalType
+    {
+        public static MalNil Instance { get; } = new MalNil();
+
+        public override TypeKind Kind => TypeKind.Nil;
+        public override string AsLiteral() => "nil";
+    }
+
+    public class MalBool : MalType<bool>
+    {
+        public override TypeKind Kind => TypeKind.Bool;
+
+        public override bool Value { get; }
+        public override string AsLiteral() => Value ? "true" : "false";
+
+        public MalBool(bool value) => Value = value;
+
+        public static MalBool True { get; } = new MalBool(true);
+        public static MalBool False { get; } = new MalBool(false);
+    }
+
+    public abstract class MalSequence : MalType<IReadOnlyCollection<MalType>>
+    {
+        public abstract IReadOnlyCollection<MalType> Values { get; }
+        public override IReadOnlyCollection<MalType> Value => Values;
+
+        protected StringBuilder ValuesToString()
+            => new StringBuilder().AppendJoin(' ', Values.Select(v => v.AsLiteral()));
+    }
+
+    public class MalDict : MalSequence
+    {
+        public MalDict(IEnumerable<KeyValuePair<MalType, MalType>> pairs)
+        {
+            Dict = new Dictionary<MalType, MalType>(pairs);
+        }
+
+        public override IReadOnlyList<MalType> Values => Dict.Values.ToArray();
+        public IReadOnlyDictionary<MalType, MalType> Dict { get; }
+
+        public override TypeKind Kind => TypeKind.HashMap;
+
+        public override string AsLiteral()
+        {
+            var sb = new StringBuilder();
+            sb.Append('{');
+            sb.AppendJoin(' ', Dict.Select(k => $"{k.Key.AsLiteral()} {k.Value.AsLiteral()}"));
+            sb.Append('}');
+            return sb.ToString();
+        }
+    }
+
+    public class MalList : MalSequence
+    {
+        public override TypeKind Kind => TypeKind.List;
+
+        public override IReadOnlyList<MalType> Values { get; }
+
+        public MalList(IEnumerable<MalType> elements)
+            => Values = elements.ToImmutableArray();
+
+        public static MalList Empty { get; } = new MalList(Array.Empty<MalList>());
+
+        public override string AsLiteral()
+        {
+            var sb = new StringBuilder();
+            sb.Append('(');
+            sb.Append(ValuesToString());
+            sb.Append(')');
+            return sb.ToString();
+        }
+    }
+
+    public class MalVector : MalSequence
+    {
+        public override TypeKind Kind => TypeKind.List;
+
+        public override IReadOnlyList<MalType> Values { get; }
+
+        public MalVector(IEnumerable<MalType> elements)
+            => Values = elements.ToImmutableArray();
+
+        public static MalVector Empty { get; } = new MalVector(Array.Empty<MalVector>());
+
+        public override string AsLiteral()
+        {
+            var sb = new StringBuilder();
+            sb.Append('[');
+            sb.Append(ValuesToString());
+            sb.Append(']');
+            return sb.ToString();
+        }
+    }
+}

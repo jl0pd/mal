@@ -1,24 +1,45 @@
 using System;
+using System.IO;
 
 namespace Mal
 {
     public static class Repl
     {
-        public static string Read(string s)
+        public static string? Read(string s)
         {
-            Console.WriteLine(s);
+            Console.Write(s);
             return Console.ReadLine();
         }
 
-        public static string Eval(string s) => s;
+        public static MalType Eval(MalType obj) => obj;
 
-        public static string Print(string s) => s;
+        public static void Print(MalType s)
+        {
+            Console.WriteLine(s.AsLiteral());
+        }
 
-        public static string Loop(string s)
+        public static void Loop(string prompt)
         {
             while (true)
             {
-                Print(Eval(Read(s)));
+                var input = Read(prompt);
+                if (input is null)
+                {
+                    break;
+                }
+
+                MalType obj;
+                try
+                {
+                    obj = ReaderStatic.ReadString(input);
+                }
+                catch(EndOfStreamException)
+                {
+                    Console.WriteLine("EOF");
+                    continue;
+                }
+
+                Print(Eval(obj));
             }
         }
     }

@@ -8,5 +8,9 @@ build:
 step0_repl.exe: build
 	cp $(EXE) ./step0_repl.exe
 
+step1_read_print.exe: build
+	cp $(EXE) ./step1_read_print.exe
+
 clean:
-	rm -r bin obj
+	rm -r Mal/bin Mal/obj
+	rm *.exe
