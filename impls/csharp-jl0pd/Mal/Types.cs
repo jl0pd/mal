@@ -26,6 +26,7 @@ namespace Mal
         Deref,
         SpliceUnquote,
         WithMeta,
+        Keyword,
     }
 
     public abstract class MalType
@@ -111,6 +112,7 @@ namespace Mal
                 "true" => Create(true),
                 "false" => Create(false),
                 "nil" => CreateNil(),
+                string str when str[0] == ':' => new MalKeyword(str[1..]),
                 string str when !IsValid(str) => throw new EndOfStreamException(),
                 string str when str[0] == '"' && str[^1] == '"' => Create(str),
                 string str => new MalSymbol(str.Trim()),
@@ -255,6 +257,19 @@ namespace Mal
 
         public static MalSymbol Empty { get; } = new MalSymbol("");
         public override string AsLiteral() => Value;
+    }
+
+    public class MalKeyword : MalType<string>
+    {
+        public MalKeyword(string value) => Value = value;
+        public override string Value { get; }
+
+        public override TypeKind Kind => TypeKind.Keyword;
+
+        public override string AsLiteral()
+        {
+            return $":{Value}";
+        }
     }
 
     public class MalNil : MalType
