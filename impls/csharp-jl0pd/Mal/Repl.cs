@@ -12,13 +12,15 @@ namespace Mal
             return Console.ReadLine();
         }
 
-        public static (MalType, ReplEnvironment) Eval(MalType obj, ReplEnvironment env) => Evaluator.Eval(obj, env);
+        public static EvalContext<MalType> Eval(EvalContext<MalType> context)
+            => Evaluator.Eval(context);
 
-        public static void Print(MalType s) => Console.WriteLine(s.AsLiteral());
+        public static void Print(MalType s)
+            => Console.WriteLine(s.AsLiteral());
 
         public static void Loop(string prompt)
         {
-            var env = new ReplEnvironment();
+            var context = EvalContext.Create((MalType)MalType.CreateNil(), new ReplEnvironment());
             while (true)
             {
                 string? input = Read(prompt);
@@ -27,10 +29,9 @@ namespace Mal
                     break;
                 }
 
-                MalType obj;
                 try
                 {
-                    obj = Reader.ReadString(input);
+                    context = context.WithObj(Reader.ReadString(input));
                 }
                 catch (EndOfStreamException)
                 {
@@ -40,7 +41,7 @@ namespace Mal
 
                 try
                 {
-                    (obj, env) = Eval(obj, env);
+                    context = Eval(context);
                 }
                 catch (KeyNotFoundException ex)
                 {
@@ -48,7 +49,7 @@ namespace Mal
                     continue;
                 }
 
-                Print(obj);
+                Print(context.Obj);
             }
         }
     }
