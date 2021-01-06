@@ -8,23 +8,6 @@ using System.Text.RegularExpressions;
 
 namespace Mal
 {
-    public static class EnumerableExtensions
-    {
-        public static IEnumerable<KeyValuePair<T, T>> ToKeyValuePairs<T>(this IEnumerable<T> seq)
-        {
-            T? prev = default;
-            int i = 0;
-            foreach (T el in seq)
-            {
-                if (i % 2 == 1)
-                {
-                    yield return new KeyValuePair<T, T>(prev!, el);
-                }
-                prev = el;
-                i++;
-            }
-        }
-    }
 
     public static class ReaderStatic
     {
@@ -47,8 +30,8 @@ namespace Mal
                 "~@" => new MalSpliceUnquote(ReadForm(it)),
                 string s => s[0] switch
                 {
-                    '(' =>  ReadSequence(')', e => new MalList(e), it),
-                    '[' =>  ReadSequence(']', e => new MalVector(e), it),
+                    '(' => ReadSequence(')', e => new MalList(e), it),
+                    '[' => ReadSequence(']', e => new MalVector(e), it),
                     '{' => ReadSequence('}', e => new MalDict(e.ToKeyValuePairs()), it),
                     '`' => new MalQuasiQuote(ReadForm(it)),
                     '\'' => new MalQuote(ReadForm(it)),

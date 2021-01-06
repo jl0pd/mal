@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 namespace Mal
@@ -11,18 +12,16 @@ namespace Mal
             return Console.ReadLine();
         }
 
-        public static MalType Eval(MalType obj) => obj;
+        public static (MalType, ReplEnvironment) Eval(MalType obj, ReplEnvironment env) => Evaluator.Eval(obj, env);
 
-        public static void Print(MalType s)
-        {
-            Console.WriteLine(s.AsLiteral());
-        }
+        public static void Print(MalType s) => Console.WriteLine(s.AsLiteral());
 
         public static void Loop(string prompt)
         {
+            var env = new ReplEnvironment();
             while (true)
             {
-                var input = Read(prompt);
+                string? input = Read(prompt);
                 if (input is null)
                 {
                     break;
@@ -33,13 +32,23 @@ namespace Mal
                 {
                     obj = ReaderStatic.ReadString(input);
                 }
-                catch(EndOfStreamException)
+                catch (EndOfStreamException)
                 {
                     Console.WriteLine("EOF");
                     continue;
                 }
 
-                Print(Eval(obj));
+                try
+                {
+                    (obj, env) = Eval(obj, env);
+                }
+                catch (KeyNotFoundException)
+                {
+                    Console.WriteLine($"Variable not found");
+                    continue;
+                }
+
+                Print(obj);
             }
         }
     }

@@ -1,10 +1,10 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Mal
@@ -27,30 +27,33 @@ namespace Mal
         SpliceUnquote,
         WithMeta,
         Keyword,
+        Delegate,
     }
 
     public abstract class MalType
     {
         public abstract TypeKind Kind { get; }
-
-        public override string ToString() => $"{{{Kind}}}";
         public abstract string AsLiteral();
 
-        public static MalType Default(TypeKind kind)
-            => kind switch
+        public override string ToString() => $"{{{Kind}}}";
+
+        public static MalType<T> CreateGeneric<T>(T value)
+        {
+            object? result = null;
+            if (typeof(T) == typeof(int))
             {
-                TypeKind.None => throw new NotSupportedException(),
-                TypeKind.List => MalList.Empty,
-                TypeKind.Bool => MalBool.False,
-                TypeKind.Number => new MalInt32(0),
-                TypeKind.String => MalString.Empty,
-                TypeKind.Char => new MalChar(char.MinValue),
-                TypeKind.Nil => MalNil.Instance,
-                TypeKind.Symbol => MalSymbol.Empty,
-                TypeKind.Quote => new MalQuote(MalNil.Instance),
-                TypeKind.QuasiQuote => new MalQuasiQuote(MalNil.Instance),
-                _ => throw new NotImplementedException(),
-            };
+                result = new MalInt32((int)(object)value!);
+            }
+            else if (typeof(T) == typeof(double))
+            {
+                result = new MalDouble((double)(object)value!);
+            }
+            else if (typeof(T) == typeof(string))
+            {
+                result = new MalString((string)(object)value!);
+            }
+            return (MalType<T>)(result ?? throw new InvalidCastException($"Cannot convert {typeof(T).FullName} to MalType"));
+        }
 
         public static MalBool Create(bool value)
             => value ? MalBool.True : MalBool.False;
@@ -266,10 +269,7 @@ namespace Mal
 
         public override TypeKind Kind => TypeKind.Keyword;
 
-        public override string AsLiteral()
-        {
-            return $":{Value}";
-        }
+        public override string AsLiteral() => $":{Value}";
     }
 
     public class MalNil : MalType
@@ -331,7 +331,7 @@ namespace Mal
         public override IReadOnlyList<MalType> Values { get; }
 
         public MalList(IEnumerable<MalType> elements)
-            => Values = elements.ToImmutableArray();
+            => Values = elements.ToArray();
 
         public static MalList Empty { get; } = new MalList(Array.Empty<MalList>());
 
@@ -352,7 +352,7 @@ namespace Mal
         public override IReadOnlyList<MalType> Values { get; }
 
         public MalVector(IEnumerable<MalType> elements)
-            => Values = elements.ToImmutableArray();
+            => Values = elements.ToArray();
 
         public static MalVector Empty { get; } = new MalVector(Array.Empty<MalVector>());
 
@@ -364,5 +364,57 @@ namespace Mal
             sb.Append(']');
             return sb.ToString();
         }
+    }
+
+    public abstract class MalDelegate<T> : MalType<T> where T : Delegate
+    {
+        public override TypeKind Kind => TypeKind.Delegate;
+        public override string AsLiteral() => $"(lambda {RuntimeHelpers.GetHashCode(this):X})";
+
+        public static implicit operator MalDelegate<Delegate>(MalDelegate<T> func)
+            => new BaseDelegate(func.Value);
+
+        private class BaseDelegate : MalDelegate<Delegate>
+        {
+            public BaseDelegate(Delegate value) => Value = value;
+            public override Delegate Value {get;}
+        }
+    }
+
+    public static class MalDelegate
+    {
+        public static MalProjection<TSource, TRes> Create<TSource, TRes>(Func<TSource, TRes> func)
+        where TSource : MalType
+        where TRes : MalType
+            => new(func);
+
+        public static MalBinaryFunction<TFirst, TSecond, TRes> Create<TFirst, TSecond, TRes>(Func<TFirst, TSecond, TRes> func)
+        where TFirst : MalType
+        where TSecond : MalType
+        where TRes : MalType
+            => new(func);
+
+        public static MalDelegate<Func<MalType<TFirst>, MalType<TSecond>, MalType<TResult>>> SimpleCreate<TFirst, TSecond, TResult>(Func<TFirst, TSecond, TResult> func)
+        {
+            return new MalBinaryFunction<MalType<TFirst>, MalType<TSecond>, MalType<TResult>>(
+                    (f, s) => MalType.CreateGeneric(func(f.Value, s.Value)));
+        }
+    }
+
+    public class MalProjection<TSource, TRes> : MalDelegate<Func<TSource, TRes>>
+    where TSource : MalType
+    where TRes : MalType
+    {
+        public MalProjection(Func<TSource, TRes> func) => Value = func;
+        public override Func<TSource, TRes> Value { get; }
+    }
+
+    public class MalBinaryFunction<TFirst, TSecond, TRes> : MalDelegate<Func<TFirst, TSecond, TRes>>
+    where TFirst : MalType
+    where TSecond : MalType
+    where TRes : MalType
+    {
+        public MalBinaryFunction(Func<TFirst, TSecond, TRes> func) => Value = func;
+        public override Func<TFirst, TSecond, TRes> Value { get; }
     }
 }
