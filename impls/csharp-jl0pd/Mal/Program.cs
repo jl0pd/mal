@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 
 namespace Mal
 {
@@ -6,7 +7,8 @@ namespace Mal
     {
         static void Main(string[] args)
         {
-            Repl.Loop("user> ");
+            var prompt = args.ElementAtOrDefault(0) ?? "user> ";
+            Repl.Loop(prompt);
         }
     }
 }

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.RegularExpressions;
 
 namespace Mal
 {
@@ -31,7 +30,7 @@ namespace Mal
                 MalType obj;
                 try
                 {
-                    obj = ReaderStatic.ReadString(input);
+                    obj = Reader.ReadString(input);
                 }
                 catch (EndOfStreamException)
                 {
@@ -45,8 +44,7 @@ namespace Mal
                 }
                 catch (KeyNotFoundException ex)
                 {
-                    var varName = Regex.Match(ex.Message, @"The given key '([^)]+)' was not present in the dictionary").Groups[1];
-                    Console.WriteLine($"'{varName}' not found");
+                    Console.WriteLine($"'{ex.Message}' not found");
                     continue;
                 }
 

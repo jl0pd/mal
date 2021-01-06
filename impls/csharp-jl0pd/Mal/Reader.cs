@@ -9,12 +9,12 @@ using System.Text.RegularExpressions;
 namespace Mal
 {
 
-    public static class ReaderStatic
+    public static class Reader
     {
         public static MalType ReadString(string s)
         {
-            var tok = new Reader(s);
-            var it = tok.GetEnumerator();
+            var tok = new Tokenizer(s);
+            IEnumerator<string> it = tok.GetEnumerator();
             return ReadForm(it);
         }
 
@@ -67,17 +67,15 @@ namespace Mal
             => MalType.FromString(it.Current);
     }
 
-    public sealed class Reader : IEnumerable<string>
+    public sealed class Tokenizer : IEnumerable<string>
     {
-        private const string _regexp = @"[\s,]*(~@|[\[\]{}()'`~^@]|""(?:\\.|[^\\""])*""?|;.*|[^\s\[\]{}('""`,;)]*)";
+        private const string Regexp = @"[\s,]*(~@|[\[\]{}()'`~^@]|""(?:\\.|[^\\""])*""?|;.*|[^\s\[\]{}('""`,;)]*)";
 
-        private readonly string _input;
         private readonly IReadOnlyList<string> _tokens;
 
-        public Reader(string input)
+        public Tokenizer(string input)
         {
-            _input = input;
-            var matches = Regex.Matches(input, _regexp);
+            MatchCollection matches = Regex.Matches(input, Regexp);
             _tokens = matches
                         .Select(m => m.Value.Trim().Trim(','))
                         .Where(m => !string.IsNullOrWhiteSpace(m))
@@ -90,10 +88,10 @@ namespace Mal
 
         private class Enumerator : IEnumerator<string>
         {
-            private readonly Reader _reader;
+            private readonly Tokenizer _reader;
             private int _index = -1;
 
-            internal Enumerator(Reader reader) => _reader = reader;
+            internal Enumerator(Tokenizer reader) => _reader = reader;
 
             public string Current => _reader._tokens[_index];
             object IEnumerator.Current => Current;
