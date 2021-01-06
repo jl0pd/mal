@@ -14,6 +14,9 @@ step1_read_print.exe: build
 step2_eval.exe: build
 	cp $(EXE) ./step2_eval.exe
 
+step3_env.exe: build
+	cp $(EXE) ./step3_env.exe
+
 clean:
 	rm -r Mal/bin Mal/obj
 	rm *.exe

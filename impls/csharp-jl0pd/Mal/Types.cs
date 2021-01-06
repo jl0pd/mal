@@ -394,7 +394,7 @@ namespace Mal
         where TRes : MalType
             => new(func);
 
-        public static MalDelegate<Func<MalType<TFirst>, MalType<TSecond>, MalType<TResult>>> SimpleCreate<TFirst, TSecond, TResult>(Func<TFirst, TSecond, TResult> func)
+        public static MalDelegate<Delegate> SimpleCreate<TFirst, TSecond, TResult>(Func<TFirst, TSecond, TResult> func)
         {
             return new MalBinaryFunction<MalType<TFirst>, MalType<TSecond>, MalType<TResult>>(
                     (f, s) => MalType.CreateGeneric(func(f.Value, s.Value)));

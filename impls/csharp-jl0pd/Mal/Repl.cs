@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace Mal
 {
@@ -42,9 +43,10 @@ namespace Mal
                 {
                     (obj, env) = Eval(obj, env);
                 }
-                catch (KeyNotFoundException)
+                catch (KeyNotFoundException ex)
                 {
-                    Console.WriteLine($"Variable not found");
+                    var varName = Regex.Match(ex.Message, @"The given key '([^)]+)' was not present in the dictionary").Groups[1];
+                    Console.WriteLine($"'{varName}' not found");
                     continue;
                 }
 
